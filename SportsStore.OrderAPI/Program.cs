@@ -1,10 +1,9 @@
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
+using SportsStore.OrderAPI.Consumers;
 using SportsStore.OrderAPI.Data;
 using SportsStore.OrderAPI.Mapping;
-
-// Note: UseSqlite extension is from Microsoft.EntityFrameworkCore.Sqlite
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -38,6 +37,10 @@ builder.Services.AddMediatR(cfg =>
 // Configure MassTransit with RabbitMQ
 builder.Services.AddMassTransit(x =>
 {
+    x.AddConsumer<InventoryResultConsumer>();
+    x.AddConsumer<PaymentResultConsumer>();
+    x.AddConsumer<ShippingResultConsumer>();
+
     x.UsingRabbitMq((context, cfg) =>
     {
         var rabbitMqSettings = builder.Configuration.GetSection("RabbitMQ");
@@ -47,7 +50,20 @@ builder.Services.AddMassTransit(x =>
             h.Password(rabbitMqSettings["Password"] ?? "guest");
         });
 
-        cfg.ConfigureEndpoints(context);
+        cfg.ReceiveEndpoint("orderapi-inventory-results", e =>
+        {
+            e.ConfigureConsumer<InventoryResultConsumer>(context);
+        });
+
+        cfg.ReceiveEndpoint("orderapi-payment-results", e =>
+        {
+            e.ConfigureConsumer<PaymentResultConsumer>(context);
+        });
+
+        cfg.ReceiveEndpoint("orderapi-shipping-results", e =>
+        {
+            e.ConfigureConsumer<ShippingResultConsumer>(context);
+        });
     });
 });
 

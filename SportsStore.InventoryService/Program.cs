@@ -1,41 +1,67 @@
+using MassTransit;
+using Serilog;
+using SportsStore.InventoryService.Consumers;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+// Configure Serilog
+builder.Host.UseSerilog((context, config) =>
+{
+    config.ReadFrom.Configuration(context.Configuration);
+    config.WriteTo.Console()
+          .WriteTo.File("logs/inventory-service-.log", rollingInterval: RollingInterval.Day)
+          .Enrich.WithProperty("ServiceName", "InventoryService")
+          .Enrich.FromLogContext();
+});
+
+// Add services to the container
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+// Configure MassTransit with RabbitMQ
+builder.Services.AddMassTransit(x =>
+{
+    x.AddConsumer<OrderSubmittedConsumer>();
+
+    x.UsingRabbitMq((context, cfg) =>
+    {
+        var rabbitMqSettings = builder.Configuration.GetSection("RabbitMQ");
+        cfg.Host(rabbitMqSettings["Host"] ?? "localhost", "/", h =>
+        {
+            h.Username(rabbitMqSettings["Username"] ?? "guest");
+            h.Password(rabbitMqSettings["Password"] ?? "guest");
+        });
+
+        cfg.ReceiveEndpoint("inventory-service", e =>
+        {
+            e.ConfigureConsumer<OrderSubmittedConsumer>(context);
+        });
+    });
+});
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
+
+app.UseSerilogRequestLogging(opts =>
+{
+    opts.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+    {
+        diagnosticContext.Set("RequestPath", httpContext.Request.Path);
+        diagnosticContext.Set("RequestMethod", httpContext.Request.Method);
+    };
+});
 
 app.UseHttpsRedirection();
+app.UseAuthorization();
+app.MapControllers();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+app.Logger.LogInformation("Inventory Service starting. Environment: {Environment}", app.Environment.EnvironmentName);
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
