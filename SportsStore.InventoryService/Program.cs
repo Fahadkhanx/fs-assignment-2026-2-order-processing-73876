@@ -1,6 +1,8 @@
 using MassTransit;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 using SportsStore.InventoryService.Consumers;
+using SportsStore.InventoryService.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,6 +20,11 @@ builder.Host.UseSerilog((context, config) =>
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Configure SQLite Database
+builder.Services.AddDbContext<InventoryDbContext>(options =>
+    options.UseSqlite(builder.Configuration.GetConnectionString("InventoryDatabase")
+        ?? "Data Source=inventory.db"));
 
 // Configure MassTransit with RabbitMQ
 builder.Services.AddMassTransit(x =>
@@ -61,6 +68,14 @@ app.UseSerilogRequestLogging(opts =>
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
+
+// Ensure database is created and seeded
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<InventoryDbContext>();
+    db.Database.EnsureCreated();
+    SeedData.EnsurePopulated(app);
+}
 
 app.Logger.LogInformation("Inventory Service starting. Environment: {Environment}", app.Environment.EnvironmentName);
 

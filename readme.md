@@ -1,4 +1,9 @@
 - Project Structure & Shared Components
 - Database & Entities
 
-working on RabbitMQ Messaging Infrastructure
+- RabbitMQ Messaging Infrastructure
+- CQRS
+- Inventory Service
+- React Admin Dashboard
+- Srilog Logging
+- working on docker

@@ -1,57 +1,167 @@
 using MassTransit;
+using Microsoft.EntityFrameworkCore;
+using SportsStore.InventoryService.Data;
+using SportsStore.InventoryService.Models;
 using SportsStore.Shared.Messages;
 
 namespace SportsStore.InventoryService.Consumers;
 
 public class OrderSubmittedConsumer : IConsumer<OrderSubmittedEvent>
 {
+    private readonly InventoryDbContext _context;
     private readonly ILogger<OrderSubmittedConsumer> _logger;
 
-    public OrderSubmittedConsumer(ILogger<OrderSubmittedConsumer> logger)
+    public OrderSubmittedConsumer(
+        InventoryDbContext context,
+        ILogger<OrderSubmittedConsumer> logger)
     {
+        _context = context;
         _logger = logger;
     }
 
     public async Task Consume(ConsumeContext<OrderSubmittedEvent> context)
     {
         var message = context.Message;
-        
+
         _logger.LogInformation(
             "Inventory Service: Processing OrderSubmittedEvent - OrderId: {OrderId}, CustomerId: {CustomerId}, CorrelationId: {CorrelationId}",
             message.OrderId, message.CustomerId, message.CorrelationId);
 
-        // Simulate inventory check
-        await Task.Delay(100); // Simulate processing time
-
-        // Simulate inventory availability (90% success rate)
-        var random = new Random();
-        bool allItemsAvailable = random.Next(100) < 90;
-
-        if (allItemsAvailable)
+        try
         {
-            _logger.LogInformation(
-                "Inventory Service: All items available for OrderId: {OrderId}, publishing InventoryConfirmedEvent",
-                message.OrderId);
+            // Check inventory for all items
+            var failedItems = new List<InventoryFailureItem>();
+            var reservedItems = new List<InventoryReservationItem>();
+            var reservations = new List<InventoryReservation>();
 
-            var confirmedEvent = new InventoryConfirmedEvent
+            foreach (var item in message.Items)
             {
-                CorrelationId = message.CorrelationId,
-                OrderId = message.OrderId,
-                CustomerId = message.CustomerId,
-                ReservedItems = message.Items.Select(i => new InventoryReservationItem
-                {
-                    ProductId = i.ProductId,
-                    ReservedQuantity = i.Quantity
-                }).ToList()
-            };
+                var inventoryItem = await _context.InventoryItems
+                    .FirstOrDefaultAsync(i => i.ProductId == item.ProductId);
 
-            await context.Publish(confirmedEvent);
+                if (inventoryItem == null)
+                {
+                    _logger.LogWarning(
+                        "Product not found in inventory - ProductId: {ProductId}, ProductName: {ProductName}",
+                        item.ProductId, item.ProductName);
+
+                    failedItems.Add(new InventoryFailureItem
+                    {
+                        ProductId = item.ProductId,
+                        ProductName = item.ProductName,
+                        RequestedQuantity = item.Quantity,
+                        AvailableQuantity = 0
+                    });
+                    continue;
+                }
+
+                if (inventoryItem.AvailableQuantity < item.Quantity)
+                {
+                    _logger.LogWarning(
+                        "Insufficient stock - ProductId: {ProductId}, ProductName: {ProductName}, Requested: {Requested}, Available: {Available}",
+                        item.ProductId, item.ProductName, item.Quantity, inventoryItem.AvailableQuantity);
+
+                    failedItems.Add(new InventoryFailureItem
+                    {
+                        ProductId = item.ProductId,
+                        ProductName = item.ProductName,
+                        RequestedQuantity = item.Quantity,
+                        AvailableQuantity = inventoryItem.AvailableQuantity
+                    });
+                    continue;
+                }
+
+                // Reserve the stock
+                inventoryItem.ReservedQuantity += item.Quantity;
+                inventoryItem.LastUpdated = DateTime.UtcNow;
+
+                reservedItems.Add(new InventoryReservationItem
+                {
+                    ProductId = item.ProductId,
+                    ReservedQuantity = item.Quantity
+                });
+
+                // Create reservation record
+                reservations.Add(new InventoryReservation
+                {
+                    OrderId = message.OrderId,
+                    ProductId = item.ProductId,
+                    ProductName = item.ProductName,
+                    Quantity = item.Quantity,
+                    Status = "Reserved",
+                    CorrelationId = message.CorrelationId,
+                    CreatedAt = DateTime.UtcNow
+                });
+
+                _logger.LogInformation(
+                    "Stock reserved - ProductId: {ProductId}, Quantity: {Quantity}, NewReserved: {NewReserved}",
+                    item.ProductId, item.Quantity, inventoryItem.ReservedQuantity);
+            }
+
+            await _context.SaveChangesAsync();
+
+            if (failedItems.Any())
+            {
+                // Some items failed - release any reservations made and publish failure
+                foreach (var reservation in reservations)
+                {
+                    var invItem = await _context.InventoryItems
+                        .FirstOrDefaultAsync(i => i.ProductId == reservation.ProductId);
+                    if (invItem != null)
+                    {
+                        invItem.ReservedQuantity -= reservation.Quantity;
+                        invItem.LastUpdated = DateTime.UtcNow;
+                    }
+                    reservation.Status = "Released";
+                    reservation.ReleasedAt = DateTime.UtcNow;
+                }
+                await _context.SaveChangesAsync();
+
+                _logger.LogWarning(
+                    "Inventory check failed for OrderId: {OrderId}, FailedItems: {FailedCount}",
+                    message.OrderId, failedItems.Count);
+
+                var failedEvent = new InventoryFailedEvent
+                {
+                    CorrelationId = message.CorrelationId,
+                    OrderId = message.OrderId,
+                    CustomerId = message.CustomerId,
+                    FailedItems = failedItems,
+                    FailureReason = "Insufficient stock for one or more items"
+                };
+
+                await context.Publish(failedEvent);
+            }
+            else
+            {
+                // All items available - confirm reservations
+                foreach (var reservation in reservations)
+                {
+                    reservation.Status = "Confirmed";
+                    reservation.ConfirmedAt = DateTime.UtcNow;
+                }
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation(
+                    "Inventory confirmed for OrderId: {OrderId}, ItemsReserved: {ItemsCount}",
+                    message.OrderId, reservedItems.Count);
+
+                var confirmedEvent = new InventoryConfirmedEvent
+                {
+                    CorrelationId = message.CorrelationId,
+                    OrderId = message.OrderId,
+                    CustomerId = message.CustomerId,
+                    ReservedItems = reservedItems
+                };
+
+                await context.Publish(confirmedEvent);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            _logger.LogWarning(
-                "Inventory Service: Insufficient stock for OrderId: {OrderId}, publishing InventoryFailedEvent",
-                message.OrderId);
+            _logger.LogError(ex,
+                "Error processing inventory for OrderId: {OrderId}, CorrelationId: {CorrelationId}",
+                message.OrderId, message.CorrelationId);
 
             var failedEvent = new InventoryFailedEvent
             {
@@ -63,9 +173,9 @@ public class OrderSubmittedConsumer : IConsumer<OrderSubmittedEvent>
                     ProductId = i.ProductId,
                     ProductName = i.ProductName,
                     RequestedQuantity = i.Quantity,
-                    AvailableQuantity = Math.Max(0, i.Quantity - random.Next(1, 5))
+                    AvailableQuantity = 0
                 }).ToList(),
-                FailureReason = "Insufficient stock for one or more items"
+                FailureReason = $"Inventory service error: {ex.Message}"
             };
 
             await context.Publish(failedEvent);

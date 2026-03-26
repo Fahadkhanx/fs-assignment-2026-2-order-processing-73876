@@ -1,59 +1,140 @@
 using MassTransit;
+using Microsoft.EntityFrameworkCore;
+using SportsStore.PaymentService.Data;
+using SportsStore.PaymentService.Models;
 using SportsStore.Shared.Messages;
 
 namespace SportsStore.PaymentService.Consumers;
 
 public class InventoryConfirmedConsumer : IConsumer<InventoryConfirmedEvent>
 {
+    private readonly PaymentDbContext _context;
     private readonly ILogger<InventoryConfirmedConsumer> _logger;
 
-    public InventoryConfirmedConsumer(ILogger<InventoryConfirmedConsumer> logger)
+    public InventoryConfirmedConsumer(
+        PaymentDbContext context,
+        ILogger<InventoryConfirmedConsumer> logger)
     {
+        _context = context;
         _logger = logger;
     }
 
     public async Task Consume(ConsumeContext<InventoryConfirmedEvent> context)
     {
         var message = context.Message;
-        
+
         _logger.LogInformation(
             "Payment Service: Processing InventoryConfirmedEvent - OrderId: {OrderId}, CustomerId: {CustomerId}, CorrelationId: {CorrelationId}",
             message.OrderId, message.CustomerId, message.CorrelationId);
 
-        // Simulate payment processing
-        await Task.Delay(150); // Simulate processing time
-
-        // Simulate payment processing (85% success rate, 5% random failure, 10% test card rejection)
-        var random = new Random();
-        int outcome = random.Next(100);
-
-        if (outcome < 85)
+        try
         {
-            // Payment approved
-            var transactionRef = $"PAY-{DateTime.UtcNow:yyyyMMdd}-{random.Next(100000, 999999)}";
-            
-            _logger.LogInformation(
-                "Payment Service: Payment approved for OrderId: {OrderId}, TransactionRef: {TransactionRef}",
-                message.OrderId, transactionRef);
-
-            var approvedEvent = new PaymentApprovedEvent
+            // Create pending transaction record
+            var transaction = new PaymentTransaction
             {
-                CorrelationId = message.CorrelationId,
                 OrderId = message.OrderId,
                 CustomerId = message.CustomerId,
-                Amount = 0, // Will be filled by OrderAPI
-                TransactionReference = transactionRef,
-                ProcessedAt = DateTime.UtcNow
+                Amount = 0, // Will be updated when we get amount from order
+                Currency = "USD",
+                Status = "Pending",
+                CorrelationId = message.CorrelationId,
+                CreatedAt = DateTime.UtcNow
             };
 
-            await context.Publish(approvedEvent);
+            _context.PaymentTransactions.Add(transaction);
+            await _context.SaveChangesAsync();
+
+            // Simulate payment processing delay
+            await Task.Delay(150);
+
+            // Determine payment outcome
+            var random = new Random();
+            int outcome = random.Next(100);
+
+            bool approved;
+            string? rejectionReason = null;
+            string? errorCode = null;
+
+            // 85% success rate, 10% decline, 5% error
+            if (outcome < 85)
+            {
+                approved = true;
+                _logger.LogInformation(
+                    "Payment approved for OrderId: {OrderId}",
+                    message.OrderId);
+            }
+            else if (outcome < 95)
+            {
+                approved = false;
+                rejectionReason = "Card declined - Insufficient funds";
+                errorCode = "DECLINED_INSUFFICIENT_FUNDS";
+                _logger.LogWarning(
+                    "Payment declined for OrderId: {OrderId} - {Reason}",
+                    message.OrderId, rejectionReason);
+            }
+            else
+            {
+                approved = false;
+                rejectionReason = "Payment processing error";
+                errorCode = "PROCESSING_ERROR";
+                _logger.LogWarning(
+                    "Payment error for OrderId: {OrderId} - {Reason}",
+                    message.OrderId, rejectionReason);
+            }
+
+            // Update transaction record
+            transaction.Status = approved ? "Approved" : "Rejected";
+            transaction.TransactionReference = approved
+                ? $"PAY-{DateTime.UtcNow:yyyyMMdd}-{random.Next(100000, 999999)}"
+                : null;
+            transaction.RejectionReason = rejectionReason;
+            transaction.ErrorCode = errorCode;
+            transaction.ProcessedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            if (approved)
+            {
+                var approvedEvent = new PaymentApprovedEvent
+                {
+                    CorrelationId = message.CorrelationId,
+                    OrderId = message.OrderId,
+                    CustomerId = message.CustomerId,
+                    Amount = transaction.Amount,
+                    TransactionReference = transaction.TransactionReference!,
+                    ProcessedAt = transaction.ProcessedAt.Value
+                };
+
+                await context.Publish(approvedEvent);
+
+                _logger.LogInformation(
+                    "PaymentApprovedEvent published - OrderId: {OrderId}, TransactionRef: {TransactionRef}",
+                    message.OrderId, transaction.TransactionReference);
+            }
+            else
+            {
+                var rejectedEvent = new PaymentRejectedEvent
+                {
+                    CorrelationId = message.CorrelationId,
+                    OrderId = message.OrderId,
+                    CustomerId = message.CustomerId,
+                    Amount = transaction.Amount,
+                    RejectionReason = rejectionReason!,
+                    ErrorCode = errorCode
+                };
+
+                await context.Publish(rejectedEvent);
+
+                _logger.LogWarning(
+                    "PaymentRejectedEvent published - OrderId: {OrderId}, Reason: {Reason}",
+                    message.OrderId, rejectionReason);
+            }
         }
-        else if (outcome < 90)
+        catch (Exception ex)
         {
-            // Test card rejection (specific card numbers)
-            _logger.LogWarning(
-                "Payment Service: Payment rejected for OrderId: {OrderId} - Test card number",
-                message.OrderId);
+            _logger.LogError(ex,
+                "Error processing payment for OrderId: {OrderId}, CorrelationId: {CorrelationId}",
+                message.OrderId, message.CorrelationId);
 
             var rejectedEvent = new PaymentRejectedEvent
             {
@@ -61,27 +142,8 @@ public class InventoryConfirmedConsumer : IConsumer<InventoryConfirmedEvent>
                 OrderId = message.OrderId,
                 CustomerId = message.CustomerId,
                 Amount = 0,
-                RejectionReason = "Card declined - Invalid test card number",
-                ErrorCode = "TEST_CARD_REJECTED"
-            };
-
-            await context.Publish(rejectedEvent);
-        }
-        else
-        {
-            // Random failure
-            _logger.LogWarning(
-                "Payment Service: Payment failed for OrderId: {OrderId} - Random failure",
-                message.OrderId);
-
-            var rejectedEvent = new PaymentRejectedEvent
-            {
-                CorrelationId = message.CorrelationId,
-                OrderId = message.OrderId,
-                CustomerId = message.CustomerId,
-                Amount = 0,
-                RejectionReason = "Payment authorization failed",
-                ErrorCode = "AUTH_FAILED"
+                RejectionReason = $"Payment service error: {ex.Message}",
+                ErrorCode = "SERVICE_ERROR"
             };
 
             await context.Publish(rejectedEvent);
