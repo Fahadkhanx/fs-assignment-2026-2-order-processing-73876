@@ -48,7 +48,7 @@ SportsStore/
 
 ## Microservices
 
-### 1. OrderAPI (Port 5000)
+### 1. OrderAPI
 The main gateway service handling order management with CQRS pattern.
 
 **Commands:**
