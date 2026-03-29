@@ -12,11 +12,17 @@ public class OrderService : IOrderService
         _httpClient = httpClient;
     }
 
-    public async Task<OrderDto> CheckoutAsync(CheckoutDto checkout)
+    public async Task<CheckoutResultDto> CheckoutAsync(CheckoutDto checkout, string blazorBaseUrl)
     {
-        var response = await _httpClient.PostAsJsonAsync("api/orders/checkout", checkout);
+        var request = new CheckoutRequestDto
+        {
+            Checkout = checkout,
+            BlazorBaseUrl = blazorBaseUrl
+        };
+        
+        var response = await _httpClient.PostAsJsonAsync("api/orders/checkout", request);
         response.EnsureSuccessStatusCode();
-        var result = await response.Content.ReadFromJsonAsync<OrderDto>();
+        var result = await response.Content.ReadFromJsonAsync<CheckoutResultDto>();
         return result ?? throw new InvalidOperationException("Checkout failed");
     }
 

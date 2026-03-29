@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Serilog;
 using SportsStore.PaymentService.Consumers;
 using SportsStore.PaymentService.Data;
+using SportsStore.PaymentService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,24 +27,22 @@ builder.Services.AddDbContext<PaymentDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("PaymentDatabase")
         ?? "Data Source=payment.db"));
 
+// Register Stripe Payment Service
+builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
+
 // Configure MassTransit with RabbitMQ
 builder.Services.AddMassTransit(x =>
 {
     x.AddConsumer<InventoryConfirmedConsumer>();
-
+    
     x.UsingRabbitMq((context, cfg) =>
     {
-        var rabbitMqSettings = builder.Configuration.GetSection("RabbitMQ");
-        cfg.Host(rabbitMqSettings["Host"] ?? "localhost", "/", h =>
+        cfg.Host(builder.Configuration["RabbitMQ:Host"] ?? "localhost", "/", h =>
         {
-            h.Username(rabbitMqSettings["Username"] ?? "guest");
-            h.Password(rabbitMqSettings["Password"] ?? "guest");
+            h.Username(builder.Configuration["RabbitMQ:Username"] ?? "guest");
+            h.Password(builder.Configuration["RabbitMQ:Password"] ?? "guest");
         });
-
-        cfg.ReceiveEndpoint("payment-service", e =>
-        {
-            e.ConfigureConsumer<InventoryConfirmedConsumer>(context);
-        });
+        cfg.ConfigureEndpoints(context);
     });
 });
 

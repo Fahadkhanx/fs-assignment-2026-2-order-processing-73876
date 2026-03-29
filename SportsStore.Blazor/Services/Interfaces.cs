@@ -12,16 +12,16 @@ public interface IProductService
 public interface ICartService
 {
     Task<CartDto> GetCartAsync();
-    Task AddToCartAsync(ProductDto product, int quantity = 1);
+    Task<(bool Success, string? ErrorMessage)> AddToCartAsync(ProductDto product, int quantity = 1);
     Task RemoveFromCartAsync(long productId);
-    Task UpdateQuantityAsync(long productId, int quantity);
+    Task<(bool Success, string? ErrorMessage)> UpdateQuantityAsync(long productId, int quantity);
     Task ClearCartAsync();
     event Action? OnCartChanged;
 }
 
 public interface IOrderService
 {
-    Task<OrderDto> CheckoutAsync(CheckoutDto checkout);
+    Task<CheckoutResultDto> CheckoutAsync(CheckoutDto checkout, string baseUrl);
     Task<IEnumerable<OrderDto>> GetCustomerOrdersAsync(string email);
     Task<OrderDto?> GetOrderAsync(int orderId);
 }

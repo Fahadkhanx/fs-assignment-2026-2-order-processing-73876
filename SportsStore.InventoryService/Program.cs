@@ -30,20 +30,15 @@ builder.Services.AddDbContext<InventoryDbContext>(options =>
 builder.Services.AddMassTransit(x =>
 {
     x.AddConsumer<OrderSubmittedConsumer>();
-
+    
     x.UsingRabbitMq((context, cfg) =>
     {
-        var rabbitMqSettings = builder.Configuration.GetSection("RabbitMQ");
-        cfg.Host(rabbitMqSettings["Host"] ?? "localhost", "/", h =>
+        cfg.Host(builder.Configuration["RabbitMQ:Host"] ?? "localhost", "/", h =>
         {
-            h.Username(rabbitMqSettings["Username"] ?? "guest");
-            h.Password(rabbitMqSettings["Password"] ?? "guest");
+            h.Username(builder.Configuration["RabbitMQ:Username"] ?? "guest");
+            h.Password(builder.Configuration["RabbitMQ:Password"] ?? "guest");
         });
-
-        cfg.ReceiveEndpoint("inventory-service", e =>
-        {
-            e.ConfigureConsumer<OrderSubmittedConsumer>(context);
-        });
+        cfg.ConfigureEndpoints(context);
     });
 });
 

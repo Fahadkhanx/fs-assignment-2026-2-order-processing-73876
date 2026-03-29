@@ -6,6 +6,9 @@ function Inventory() {
   const [reservations, setReservations] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [editingProduct, setEditingProduct] = useState(null)
+  const [editStock, setEditStock] = useState(0)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -24,6 +27,35 @@ function Inventory() {
       setError('Failed to load inventory data')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleEditClick = (item) => {
+    setEditingProduct(item)
+    setEditStock(item.stockQuantity)
+  }
+
+  const handleCancelEdit = () => {
+    setEditingProduct(null)
+    setEditStock(0)
+  }
+
+  const handleSaveStock = async () => {
+    if (!editingProduct) return
+    setSaving(true)
+    try {
+      await inventoryApi.updateStock(editingProduct.productId, editStock)
+      // Update local state
+      setInventory(inventory.map(item => 
+        item.productId === editingProduct.productId 
+          ? { ...item, stockQuantity: editStock, availableQuantity: editStock - item.reservedQuantity }
+          : item
+      ))
+      setEditingProduct(null)
+    } catch (err) {
+      setError('Failed to update stock')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -64,6 +96,7 @@ function Inventory() {
                       <th>Stock</th>
                       <th>Reserved</th>
                       <th>Available</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -79,6 +112,14 @@ function Inventory() {
                           <span className={item.availableQuantity < 5 ? 'text-danger fw-bold' : ''}>
                             {item.availableQuantity}
                           </span>
+                        </td>
+                        <td>
+                          <button 
+                            className="btn btn-sm btn-outline-primary"
+                            onClick={() => handleEditClick(item)}
+                          >
+                            Edit Stock
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -116,6 +157,47 @@ function Inventory() {
           </div>
         </div>
       </div>
+
+      {/* Edit Stock Modal */}
+      {editingProduct && (
+        <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Edit Stock - {editingProduct.productName}</h5>
+                <button type="button" className="btn-close" onClick={handleCancelEdit}></button>
+              </div>
+              <div className="modal-body">
+                <div className="mb-3">
+                  <label className="form-label">Current Stock Quantity</label>
+                  <input 
+                    type="number" 
+                    className="form-control" 
+                    value={editStock}
+                    onChange={(e) => setEditStock(parseInt(e.target.value) || 0)}
+                    min="0"
+                  />
+                </div>
+                <div className="alert alert-info">
+                  <strong>Reserved:</strong> {editingProduct.reservedQuantity} | 
+                  <strong> Available after update:</strong> {editStock - editingProduct.reservedQuantity}
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={handleCancelEdit}>Cancel</button>
+                <button 
+                  type="button" 
+                  className="btn btn-primary" 
+                  onClick={handleSaveStock}
+                  disabled={saving}
+                >
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

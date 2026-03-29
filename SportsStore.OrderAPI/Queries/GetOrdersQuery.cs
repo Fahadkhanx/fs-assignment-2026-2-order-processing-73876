@@ -36,6 +36,7 @@ public class GetOrdersQueryHandler : IRequestHandler<GetOrdersQuery, PaginatedRe
         {
             var dto = _mapper.Map<OrderDto>(o);
             dto.CustomerName = o.Customer?.Name ?? "";
+            dto.Email = o.Customer?.Email ?? "";
             return dto;
         }).ToList();
 

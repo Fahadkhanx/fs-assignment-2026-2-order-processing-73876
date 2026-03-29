@@ -1,7 +1,6 @@
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
-using SportsStore.OrderAPI.Consumers;
 using SportsStore.OrderAPI.Data;
 using SportsStore.OrderAPI.Mapping;
 
@@ -18,7 +17,11 @@ builder.Host.UseSerilog((context, config) =>
 });
 
 // Add services to the container
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -34,36 +37,20 @@ builder.Services.AddAutoMapper(typeof(MappingProfile));
 builder.Services.AddMediatR(cfg => 
     cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
 
+// Add HttpClient for inter-service communication
+builder.Services.AddHttpClient();
+
 // Configure MassTransit with RabbitMQ
 builder.Services.AddMassTransit(x =>
 {
-    x.AddConsumer<InventoryResultConsumer>();
-    x.AddConsumer<PaymentResultConsumer>();
-    x.AddConsumer<ShippingResultConsumer>();
-
     x.UsingRabbitMq((context, cfg) =>
     {
-        var rabbitMqSettings = builder.Configuration.GetSection("RabbitMQ");
-        cfg.Host(rabbitMqSettings["Host"] ?? "localhost", "/", h =>
+        cfg.Host(builder.Configuration["RabbitMQ:Host"] ?? "localhost", "/", h =>
         {
-            h.Username(rabbitMqSettings["Username"] ?? "guest");
-            h.Password(rabbitMqSettings["Password"] ?? "guest");
+            h.Username(builder.Configuration["RabbitMQ:Username"] ?? "guest");
+            h.Password(builder.Configuration["RabbitMQ:Password"] ?? "guest");
         });
-
-        cfg.ReceiveEndpoint("orderapi-inventory-results", e =>
-        {
-            e.ConfigureConsumer<InventoryResultConsumer>(context);
-        });
-
-        cfg.ReceiveEndpoint("orderapi-payment-results", e =>
-        {
-            e.ConfigureConsumer<PaymentResultConsumer>(context);
-        });
-
-        cfg.ReceiveEndpoint("orderapi-shipping-results", e =>
-        {
-            e.ConfigureConsumer<ShippingResultConsumer>(context);
-        });
+        cfg.ConfigureEndpoints(context);
     });
 });
 
@@ -72,11 +59,12 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins(
-                "http://localhost:5001",  // Blazor
-                "http://localhost:3000",  // React Admin
-                "http://localhost:5173"   // Vite dev server
-              )
+        policy.SetIsOriginAllowed(origin => 
+                {
+                    // Allow any localhost origin in development
+                    var uri = new Uri(origin);
+                    return uri.Host == "localhost" || uri.Host == "127.0.0.1";
+                })
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();

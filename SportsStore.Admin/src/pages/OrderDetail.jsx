@@ -78,7 +78,7 @@ function OrderDetail() {
           </ol>
         </nav>
         <h1>Order #{order.orderId}</h1>
-        <p className="text-muted">Placed on {formatDate(order.orderDate)}</p>
+        <p className="text-muted">Placed on {formatDate(order.createdAt)}</p>
       </div>
 
       <div className="row">
@@ -103,15 +103,15 @@ function OrderDetail() {
                     <tr key={idx}>
                       <td>{item.productName}</td>
                       <td>{item.quantity}</td>
-                      <td>${item.price?.toLocaleString() || '0.00'}</td>
-                      <td>${(item.price * item.quantity)?.toLocaleString() || '0.00'}</td>
+                      <td>${item.productPrice?.toLocaleString() || '0.00'}</td>
+                      <td>${item.lineTotal?.toLocaleString() || '0.00'}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr>
                     <td colSpan="3" className="text-end"><strong>Order Total:</strong></td>
-                    <td><strong>${order.total?.toLocaleString() || '0.00'}</strong></td>
+                    <td><strong>${order.totalAmount?.toLocaleString() || '0.00'}</strong></td>
                   </tr>
                 </tfoot>
               </table>

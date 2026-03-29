@@ -32,7 +32,7 @@ public class ProcessPaymentResultCommandHandler : IRequestHandler<ProcessPayment
             return false;
         }
 
-        // Create payment record
+ 
         var paymentRecord = new PaymentRecord
         {
             OrderId = order.OrderId,
@@ -59,7 +59,7 @@ public class ProcessPaymentResultCommandHandler : IRequestHandler<ProcessPayment
         }
         else
         {
-            // Payment failed
+           
             order.Status = OrderStatus.PaymentFailed;
             order.UpdatedAt = DateTime.UtcNow;
 

@@ -33,6 +33,16 @@ else if (_orderPlaced)
         <a href="/products" class="btn btn-outline-primary ms-2">Continue Shopping</a>
     </div>
 }
+else if (_redirectingToPayment)
+{
+    <div class="text-center my-5">
+        <div class="spinner-border text-primary mb-3" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <h4>Redirecting to Secure Payment...</h4>
+        <p class="text-muted">Please wait while we redirect you to our secure payment processor.</p>
+    </div>
+}
 else
 {
     <div class="row">
@@ -60,8 +70,8 @@ else
 
                         <div class="mb-3">
                             <label class="form-label">Address *</label>
-                            <InputText @bind-Value="_model.Address" class="form-control" />
-                            <ValidationMessage For="() => _model.Address" />
+                            <InputText @bind-Value="_model.Line1" class="form-control" />
+                            <ValidationMessage For="() => _model.Line1" />
                         </div>
 
                         <div class="row mb-3">
@@ -77,8 +87,8 @@ else
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Zip Code *</label>
-                                <InputText @bind-Value="_model.ZipCode" class="form-control" />
-                                <ValidationMessage For="() => _model.ZipCode" />
+                                <InputText @bind-Value="_model.Zip" class="form-control" />
+                                <ValidationMessage For="() => _model.Zip" />
                             </div>
                         </div>
 
@@ -93,7 +103,7 @@ else
                             <div class="alert alert-danger">@_errorMessage</div>
                         }
 
-                        <button type="submit" class="btn btn-primary btn-lg" disabled="_submitting">
+                        <button type="submit" class="btn btn-primary btn-lg" disabled="@_submitting">
                             @if (_submitting)
                             {
                                 <span class="spinner-border spinner-border-sm me-2"></span>
@@ -133,11 +143,13 @@ else
     [Inject] private ICartService CartService { get; set; } = default!;
     [Inject] private IOrderService OrderService { get; set; } = default!;
     [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+    [Inject] private IConfiguration Configuration { get; set; } = default!;
 
     private CartDto _cart = new();
     private bool _loading = true;
     private bool _submitting = false;
     private bool _orderPlaced = false;
+    private bool _redirectingToPayment = false;
     private int _orderId;
     private string _email = "";
     private string? _errorMessage;
@@ -154,7 +166,7 @@ else
         public string Email { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Address is required")]
-        public string Address { get; set; } = string.Empty;
+        public string Line1 { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "City is required")]
         public string City { get; set; } = string.Empty;
@@ -163,7 +175,7 @@ else
         public string State { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Zip Code is required")]
-        public string ZipCode { get; set; } = string.Empty;
+        public string Zip { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Country is required")]
         public string Country { get; set; } = "USA";
@@ -198,22 +210,42 @@ else
             {
                 Name = _model.Name,
                 Email = _model.Email,
-                Address = _model.Address,
+                Line1 = _model.Line1,
                 City = _model.City,
                 State = _model.State,
-                ZipCode = _model.ZipCode,
+                Zip = _model.Zip,
                 Country = _model.Country,
-                Items = _cart.Items.Select(i => new CheckoutItemDto
+                CartItems = _cart.Items.Select(i => new CheckoutItemDto
                 {
                     ProductId = i.ProductId,
                     ProductName = i.ProductName,
                     Quantity = i.Quantity,
-                    Price = i.Price
+                    ProductPrice = i.Price
                 }).ToList()
             };
 
-            var order = await OrderService.CheckoutAsync(checkout);
-            _orderId = order.OrderId;
+            // Get Blazor base URL from configuration (for Stripe redirect)
+            var blazorBaseUrl = Configuration["BlazorBaseUrl"] ?? NavigationManager.BaseUri.TrimEnd('/');
+            var result = await OrderService.CheckoutAsync(checkout, blazorBaseUrl);
+
+            // Check for errors (e.g., insufficient inventory)
+            if (!string.IsNullOrEmpty(result.ErrorMessage))
+            {
+                _errorMessage = result.ErrorMessage;
+                return;
+            }
+            
+            if (result.RequiresPayment && !string.IsNullOrEmpty(result.PaymentUrl))
+            {
+                // Redirect to Stripe payment page
+                _redirectingToPayment = true;
+                await CartService.ClearCartAsync();
+                NavigationManager.NavigateTo(result.PaymentUrl, forceLoad: true);
+                return;
+            }
+            
+            // No payment required (Stripe not configured), order is complete
+            _orderId = result.OrderId;
             _email = _model.Email;
             _orderPlaced = true;
             await CartService.ClearCartAsync();

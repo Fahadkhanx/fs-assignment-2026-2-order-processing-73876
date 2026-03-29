@@ -29,7 +29,7 @@ public class OrderSubmittedConsumer : IConsumer<OrderSubmittedEvent>
 
         try
         {
-            // Check inventory for all items
+    
             var failedItems = new List<InventoryFailureItem>();
             var reservedItems = new List<InventoryReservationItem>();
             var reservations = new List<InventoryReservation>();
@@ -71,7 +71,7 @@ public class OrderSubmittedConsumer : IConsumer<OrderSubmittedEvent>
                     continue;
                 }
 
-                // Reserve the stock
+        
                 inventoryItem.ReservedQuantity += item.Quantity;
                 inventoryItem.LastUpdated = DateTime.UtcNow;
 
@@ -81,7 +81,7 @@ public class OrderSubmittedConsumer : IConsumer<OrderSubmittedEvent>
                     ReservedQuantity = item.Quantity
                 });
 
-                // Create reservation record
+          
                 reservations.Add(new InventoryReservation
                 {
                     OrderId = message.OrderId,
@@ -102,7 +102,7 @@ public class OrderSubmittedConsumer : IConsumer<OrderSubmittedEvent>
 
             if (failedItems.Any())
             {
-                // Some items failed - release any reservations made and publish failure
+               
                 foreach (var reservation in reservations)
                 {
                     var invItem = await _context.InventoryItems
@@ -134,7 +134,7 @@ public class OrderSubmittedConsumer : IConsumer<OrderSubmittedEvent>
             }
             else
             {
-                // All items available - confirm reservations
+          
                 foreach (var reservation in reservations)
                 {
                     reservation.Status = "Confirmed";

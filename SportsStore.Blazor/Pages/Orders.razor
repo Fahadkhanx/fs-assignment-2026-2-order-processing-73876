@@ -40,11 +40,11 @@ else if (_orders.Any())
                 {
                     <tr>
                         <td>#@order.OrderId</td>
-                        <td>@order.OrderDate.ToString("MMM dd, yyyy")</td>
+                        <td>@order.CreatedAt.ToString("MMM dd, yyyy")</td>
                         <td>
                             <span class="badge @GetStatusBadgeClass(order.Status)">@order.Status</span>
                         </td>
-                        <td>@order.Total.ToString("C")</td>
+                        <td>@order.TotalAmount.ToString("C")</td>
                         <td>
                             <a href="/orders/@order.OrderId" class="btn btn-outline-primary btn-sm">View Details</a>
                         </td>

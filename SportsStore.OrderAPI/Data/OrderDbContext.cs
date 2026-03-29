@@ -19,7 +19,7 @@ public class OrderDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // Order configuration
+        
         modelBuilder.Entity<Order>(entity =>
         {
             entity.HasOne(o => o.Customer)
@@ -31,7 +31,7 @@ public class OrderDbContext : DbContext
                 .HasPrecision(10, 2);
         });
 
-        // OrderItem configuration
+       
         modelBuilder.Entity<OrderItem>(entity =>
         {
             entity.HasOne(oi => oi.Order)
@@ -43,7 +43,7 @@ public class OrderDbContext : DbContext
                 .HasPrecision(8, 2);
         });
 
-        // PaymentRecord configuration
+       
         modelBuilder.Entity<PaymentRecord>(entity =>
         {
             entity.HasOne(p => p.Order)
@@ -55,7 +55,7 @@ public class OrderDbContext : DbContext
                 .HasPrecision(10, 2);
         });
 
-        // ShipmentRecord configuration
+       
         modelBuilder.Entity<ShipmentRecord>(entity =>
         {
             entity.HasOne(s => s.Order)
@@ -64,7 +64,7 @@ public class OrderDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // InventoryRecord configuration
+        
         modelBuilder.Entity<InventoryRecord>(entity =>
         {
             entity.HasOne(i => i.Order)
@@ -73,7 +73,7 @@ public class OrderDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // Product configuration
+       
         modelBuilder.Entity<Product>(entity =>
         {
             entity.Property(p => p.Price)

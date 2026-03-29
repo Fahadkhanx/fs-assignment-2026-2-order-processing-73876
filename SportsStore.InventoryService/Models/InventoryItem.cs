@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace SportsStore.InventoryService.Models;
 
 /// <summary>
-/// Represents inventory stock for a product
+
 /// </summary>
 public class InventoryItem
 {
@@ -34,7 +34,7 @@ public class InventoryItem
 }
 
 /// <summary>
-/// Tracks inventory reservations for orders
+
 /// </summary>
 public class InventoryReservation
 {

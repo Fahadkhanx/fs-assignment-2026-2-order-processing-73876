@@ -16,8 +16,9 @@ function Orders() {
     try {
       setLoading(true)
       const response = await orderApi.getAll(page, 10)
-      setOrders(response.data.orders || response.data)
+      setOrders(response.data.items || response.data.orders || response.data)
     } catch (err) {
+      console.error('Error loading orders:', err)
       setError('Failed to load orders')
     } finally {
       setLoading(false)
@@ -105,10 +106,10 @@ function Orders() {
                       </Link>
                     </td>
                     <td>{order.customerName}</td>
-                    <td>{order.email}</td>
+                    <td>{order.email || 'N/A'}</td>
                     <td>{getStatusBadge(order.status)}</td>
-                    <td>${order.total?.toLocaleString() || '0.00'}</td>
-                    <td>{formatDate(order.orderDate)}</td>
+                    <td>${order.totalAmount?.toLocaleString() || order.total?.toLocaleString() || '0.00'}</td>
+                    <td>{formatDate(order.createdAt || order.orderDate)}</td>
                     <td>
                       <Link 
                         to={`/orders/${order.orderId}`} 

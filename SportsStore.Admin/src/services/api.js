@@ -17,7 +17,7 @@ export const orderApi = {
     axios.get(`${API_BASE}/orders/customer?email=${encodeURIComponent(email)}`),
   
   getDashboard: () => 
-    axios.get(`${API_BASE}/orders/dashboard`),
+    axios.get(`${API_BASE}/orders/dashboard/summary`),
   
   cancel: (id) => 
     axios.post(`${API_BASE}/orders/${id}/cancel`)
@@ -25,18 +25,21 @@ export const orderApi = {
 
 // Inventory API
 export const inventoryApi = {
-  getAll: () => 
+  getAll: () =>
     axios.get(`${API_BASE}/inventory`),
   
-  getById: (productId) => 
+  getById: (productId) =>
     axios.get(`${API_BASE}/inventory/${productId}`),
   
   getReservations: (orderId = null) => {
-    const url = orderId 
+    const url = orderId
       ? `${API_BASE}/inventory/reservations?orderId=${orderId}`
       : `${API_BASE}/inventory/reservations`
     return axios.get(url)
-  }
+  },
+
+  updateStock: (productId, stockQuantity) =>
+    axios.put(`${API_BASE}/inventory/${productId}/stock`, { stockQuantity })
 }
 
 // Payment API
@@ -68,12 +71,18 @@ export const shippingApi = {
     return axios.get(url)
   },
   
-  getShipment: (id) => 
+  getShipment: (id) =>
     axios.get(`${API_BASE}/shipping/shipments/${id}`),
   
-  getCarriers: () => 
+  getCarriers: () =>
     axios.get(`${API_BASE}/shipping/carriers`),
   
-  track: (trackingNumber) => 
-    axios.get(`${API_BASE}/shipping/track/${trackingNumber}`)
+  track: (trackingNumber) =>
+    axios.get(`${API_BASE}/shipping/track/${trackingNumber}`),
+
+  dispatch: (shipmentId) =>
+    axios.post(`${API_BASE}/shipping/shipments/${shipmentId}/dispatch`),
+
+  deliver: (shipmentId) =>
+    axios.post(`${API_BASE}/shipping/shipments/${shipmentId}/deliver`)
 }

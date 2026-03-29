@@ -7,6 +7,7 @@ function Shipments() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [statusFilter, setStatusFilter] = useState('')
+  const [actionLoading, setActionLoading] = useState(null)
 
   useEffect(() => {
     loadData()
@@ -35,6 +36,38 @@ function Shipments() {
       month: 'short',
       day: 'numeric'
     })
+  }
+
+  const handleDispatch = async (shipmentId) => {
+    try {
+      setActionLoading(shipmentId)
+      await shippingApi.dispatch(shipmentId)
+      setShipments(shipments.map(s => 
+        s.shipmentId === shipmentId 
+          ? { ...s, status: 'Dispatched', actualDispatchDate: new Date().toISOString() }
+          : s
+      ))
+    } catch (err) {
+      setError('Failed to dispatch shipment')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleDeliver = async (shipmentId) => {
+    try {
+      setActionLoading(shipmentId)
+      await shippingApi.deliver(shipmentId)
+      setShipments(shipments.map(s => 
+        s.shipmentId === shipmentId 
+          ? { ...s, status: 'Delivered', actualDeliveryDate: new Date().toISOString() }
+          : s
+      ))
+    } catch (err) {
+      setError('Failed to mark as delivered')
+    } finally {
+      setActionLoading(null)
+    }
   }
 
   if (loading) {
@@ -86,6 +119,7 @@ function Shipments() {
                       <th>Carrier</th>
                       <th>Status</th>
                       <th>Est. Delivery</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -107,6 +141,29 @@ function Shipments() {
                           </span>
                         </td>
                         <td>{formatDate(ship.estimatedDeliveryDate)}</td>
+                        <td>
+                          {ship.status === 'Created' && (
+                            <button 
+                              className="btn btn-sm btn-primary"
+                              onClick={() => handleDispatch(ship.shipmentId)}
+                              disabled={actionLoading === ship.shipmentId}
+                            >
+                              {actionLoading === ship.shipmentId ? 'Processing...' : 'Dispatch'}
+                            </button>
+                          )}
+                          {ship.status === 'Dispatched' && (
+                            <button 
+                              className="btn btn-sm btn-success"
+                              onClick={() => handleDeliver(ship.shipmentId)}
+                              disabled={actionLoading === ship.shipmentId}
+                            >
+                              {actionLoading === ship.shipmentId ? 'Processing...' : 'Deliver'}
+                            </button>
+                          )}
+                          {ship.status === 'Delivered' && (
+                            <span className="text-muted">Completed</span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

@@ -38,11 +38,11 @@ public class ProcessInventoryResultCommandHandler : IRequestHandler<ProcessInven
 
         if (request.Success)
         {
-            // Inventory confirmed - update status to PaymentPending
+          
             order.Status = OrderStatus.PaymentPending;
             order.UpdatedAt = DateTime.UtcNow;
 
-            // Create inventory records
+          
             foreach (var item in order.Items)
             {
                 _context.InventoryRecords.Add(new InventoryRecord
@@ -63,7 +63,7 @@ public class ProcessInventoryResultCommandHandler : IRequestHandler<ProcessInven
         }
         else
         {
-            // Inventory failed
+           
             order.Status = OrderStatus.InventoryFailed;
             order.UpdatedAt = DateTime.UtcNow;
 

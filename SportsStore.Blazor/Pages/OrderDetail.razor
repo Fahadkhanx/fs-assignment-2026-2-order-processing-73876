@@ -30,7 +30,7 @@ else
     </nav>
 
     <h1>Order #@_order.OrderId</h1>
-    <p class="text-muted">Placed on @_order.OrderDate.ToString("MMMM dd, yyyy 'at' h:mm tt")</p>
+    <p class="text-muted">Placed on @_order.CreatedAt.ToString("MMMM dd, yyyy 'at' h:mm tt")</p>
 
     <div class="row mt-4">
         <div class="col-md-8">
@@ -55,7 +55,7 @@ else
                                 <tr>
                                     <td>@item.ProductName</td>
                                     <td>@item.Quantity</td>
-                                    <td>@item.Price.ToString("C")</td>
+                                    <td>@item.ProductPrice.ToString("C")</td>
                                     <td>@item.LineTotal.ToString("C")</td>
                                 </tr>
                             }
@@ -63,7 +63,7 @@ else
                         <tfoot>
                             <tr>
                                 <td colspan="3" class="text-end"><strong>Order Total:</strong></td>
-                                <td><strong>@_order.Total.ToString("C")</strong></td>
+                                <td><strong>@_order.TotalAmount.ToString("C")</strong></td>
                             </tr>
                         </tfoot>
                     </table>
@@ -78,22 +78,33 @@ else
                 </div>
                 <div class="card-body">
                     <p><strong>@_order.CustomerName</strong></p>
-                    <p class="text-muted mb-0">@_order.Email</p>
                 </div>
             </div>
 
-            @if (!string.IsNullOrEmpty(_order.TrackingNumber))
-            {
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="mb-0">Shipping Information</h5>
-                    </div>
-                    <div class="card-body">
-                        <p><strong>Carrier:</strong> @_order.Carrier</p>
-                        <p><strong>Tracking:</strong> @_order.TrackingNumber</p>
-                    </div>
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Shipping Information</h5>
                 </div>
-            }
+                <div class="card-body">
+                    <p class="mb-1">@_order.Line1</p>
+                    @if (!string.IsNullOrEmpty(_order.Line2))
+                    {
+                        <p class="mb-1">@_order.Line2</p>
+                    }
+                    @if (!string.IsNullOrEmpty(_order.Line3))
+                    {
+                        <p class="mb-1">@_order.Line3</p>
+                    }
+                    <p class="mb-1">@_order.City, @_order.State @_order.Zip</p>
+                    <p class="mb-0">@_order.Country</p>
+                    @if (_order.GiftWrap)
+                    {
+                        <div class="mt-2">
+                            <span class="badge bg-info">Gift Wrap</span>
+                        </div>
+                    }
+                </div>
+            </div>
 
             <div class="card">
                 <div class="card-header">

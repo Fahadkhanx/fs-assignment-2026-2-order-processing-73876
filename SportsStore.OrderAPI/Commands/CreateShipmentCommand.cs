@@ -50,7 +50,7 @@ public class CreateShipmentCommandHandler : IRequestHandler<CreateShipmentComman
 
         _context.ShipmentRecords.Add(shipmentRecord);
 
-        // Update order status to Completed
+      
         order.Status = OrderStatus.Completed;
         order.UpdatedAt = DateTime.UtcNow;
 

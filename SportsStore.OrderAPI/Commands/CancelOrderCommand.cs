@@ -31,7 +31,7 @@ public class CancelOrderCommandHandler : IRequestHandler<CancelOrderCommand, boo
             return false;
         }
 
-        // Can only cancel orders that are not completed
+ 
         if (order.Status == OrderStatus.Completed)
         {
             _logger.LogWarning("CancelOrder: Cannot cancel completed order - OrderId: {OrderId}", request.OrderId);

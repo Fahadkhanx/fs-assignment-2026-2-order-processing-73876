@@ -15,7 +15,8 @@ function Payments() {
     try {
       setLoading(true)
       const response = await paymentApi.getTransactions(null, statusFilter || null)
-      setTransactions(response.data)
+     
+      setTransactions(response.data.value || response.data || [])
     } catch (err) {
       setError('Failed to load payment transactions')
     } finally {
@@ -64,8 +65,8 @@ function Payments() {
           >
             <option value="">All Statuses</option>
             <option value="Pending">Pending</option>
-            <option value="Approved">Approved</option>
-            <option value="Rejected">Rejected</option>
+            <option value="Completed">Completed</option>
+            <option value="Failed">Failed</option>
           </select>
         </div>
         <div className="card-body">
@@ -91,8 +92,9 @@ function Payments() {
                     <td>${tx.amount?.toLocaleString() || '0.00'}</td>
                     <td>
                       <span className={`badge ${
-                        tx.status === 'Approved' ? 'bg-success' :
-                        tx.status === 'Rejected' ? 'bg-danger' : 'bg-warning'
+                        tx.status === 'Completed' ? 'bg-success' :
+                        tx.status === 'Failed' ? 'bg-danger' :
+                        tx.status === 'Pending' ? 'bg-warning' : 'bg-secondary'
                       }`}>
                         {tx.status}
                       </span>

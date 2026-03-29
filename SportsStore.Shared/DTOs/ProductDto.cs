@@ -19,3 +19,12 @@ public class ProductDto
     [Required(ErrorMessage = "Please specify a category")]
     public string Category { get; set; } = string.Empty;
 }
+
+public class PagedProductsDto
+{
+    public List<ProductDto> Products { get; set; } = new();
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalPages { get; set; }
+}

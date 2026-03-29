@@ -25,13 +25,35 @@ public class ProductsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<List<ProductDto>>> GetAll()
+    public async Task<ActionResult<PagedProductsDto>> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] string? category = null)
     {
-        _logger.LogInformation("GetAll products endpoint called");
+        _logger.LogInformation("GetAll products endpoint called - Page: {Page}, PageSize: {PageSize}, Category: {Category}", page, pageSize, category);
 
-        var products = await _context.Products.ToListAsync();
+        var query = _context.Products.AsQueryable();
+
+        if (!string.IsNullOrEmpty(category))
+        {
+            query = query.Where(p => p.Category == category);
+        }
+
+        var totalCount = await query.CountAsync();
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+        var products = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
         var productDtos = _mapper.Map<List<ProductDto>>(products);
-        return Ok(productDtos);
+
+        return Ok(new PagedProductsDto
+        {
+            Products = productDtos,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+            TotalPages = totalPages
+        });
     }
 
     [HttpGet("{id}")]
@@ -46,5 +68,19 @@ public class ProductsController : ControllerBase
 
         var productDto = _mapper.Map<ProductDto>(product);
         return Ok(productDto);
+    }
+
+    [HttpGet("categories")]
+    public async Task<ActionResult<List<string>>> GetCategories()
+    {
+        _logger.LogInformation("GetCategories endpoint called");
+
+        var categories = await _context.Products
+            .Select(p => p.Category)
+            .Distinct()
+            .OrderBy(c => c)
+            .ToListAsync();
+
+        return Ok(categories);
     }
 }
