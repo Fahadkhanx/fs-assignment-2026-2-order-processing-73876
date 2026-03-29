@@ -1,8 +1,150 @@
 # SportsStore - Distributed Order Processing Platform
 
-A comprehensive distributed order processing platform built with .NET 10 microservices architecture, featuring RabbitMQ messaging, CQRS pattern, Blazor WebAssembly customer portal, and React admin dashboard.
+A simple e-commerce platform with microservices architecture. Built with .NET 10, React, and Blazor.
 
+---
 
+## System Architecture
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  React Admin    │     │  Blazor Portal  │     │   Order API     │
+│   (Port 3000)   │     │  (Port 5187)    │     │  (Port 5138)    │
+└────────┬────────┘     └────────┬────────┘     └────────┬────────┘
+         │                       │                       │
+         └───────────────────────┴───────────────────────┘
+                                 │
+                    ┌────────────┴────────────┐
+                    │     Rabbit MQ   
+                    └────────────┬────────────┘
+                                 │
+         ┌───────────────────────┼───────────────────────┐
+         │                       │                       │
+┌────────▼────────┐     ┌────────▼────────┐     ┌────────▼────────┐
+│   Inventory     │     │    Payment      │     │    Shipping     │
+│  (Port 5139)    │     │  (Port 5140)    │     │  (Port 5141)    │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+**4 Microservices:**
+1. **OrderAPI** - Main API, handles orders and checkout
+2. **InventoryService** - Manages product stock
+3. **PaymentService** - Processes payments with Stripe
+4. **ShippingService** - Manages shipments
+
+---
+
+## Event Flow (Order Processing)
+
+```
+1. Customer clicks "Checkout" in Blazor
+         │
+         ▼
+2. OrderAPI creates order (Status: Submitted)
+         │
+         ▼
+3. OrderAPI sends OrderSubmittedEvent → InventoryService
+         │
+         ▼
+4. InventoryService checks stock
+   ├─ If available: InventoryConfirmedEvent → PaymentService
+   └─ If not: Order cancelled
+         │
+         ▼
+5. PaymentService processes payment with Stripe
+   ├─ If success: PaymentApprovedEvent → ShippingService
+   └─ If failed: Order marked PaymentFailed
+         │
+         ▼
+6. ShippingService creates shipment
+         │
+         ▼
+7. Order status: Shipped → Delivered
+```
+
+---
+
+## How to Run
+
+### Option 1: Docker (Recommended - Single Container)
+
+```bash
+# Build the image
+docker build -f Dockerfile.single -t sportsstore .
+
+# Run the container
+docker run -d -p 3000:3000 -p 5187:5187 -p 5138-5141:5138-5141 sportsstore
+```
+
+**Access the app:**
+- React Admin: http://localhost:3000
+- Blazor Portal: http://localhost:5187
+- Order API: http://localhost:5138
+
+### Option 2: Manual Run
+
+**Step 1: Start all services**
+```bash
+# Terminal 1: OrderAPI
+cd SportsStore.OrderAPI
+dotnet run --urls "http://localhost:5138"
+
+# Terminal 2: InventoryService
+cd SportsStore.InventoryService
+dotnet run --urls "http://localhost:5139"
+
+# Terminal 3: PaymentService
+cd SportsStore.PaymentService
+dotnet run --urls "http://localhost:5140"
+
+# Terminal 4: ShippingService
+cd SportsStore.ShippingService
+dotnet run --urls "http://localhost:5141"
+```
+
+**Step 2: Start frontends**
+```bash
+# Terminal 5: Blazor
+cd SportsStore.Blazor
+dotnet run --urls "http://localhost:5187"
+
+# Terminal 6: React Admin
+cd SportsStore.Admin
+npm install
+npm run dev
+```
+
+---
+
+## Service Responsibilities
+
+| Service | Port | What it does |
+|---------|------|--------------|
+| **OrderAPI** | 5138 | Main API. Handles checkout, orders, products. Uses CQRS pattern. |
+| **InventoryService** | 5139 | Manages stock levels. Checks availability before payment. |
+| **PaymentService** | 5140 | Processes payments using Stripe. Handles test cards. |
+| **ShippingService** | 5141 | Creates shipments and tracks delivery status. |
+| **React Admin** | 3000 | Admin dashboard to manage orders, inventory, payments. |
+| **Blazor Portal** | 5187 | Customer-facing shop to browse products and checkout. |
+
+---
+
+## Assumptions and Limitations
+
+### Assumptions
+- SQLite database used (simple, no setup needed)
+- Stripe test mode (no real payments)
+- Single container deployment (all services in one Docker image)
+- In-memory messaging (RabbitMQ disabled in single container)
+
+### Limitations
+- No real RabbitMQ in single container (services communicate via HTTP)
+- SQLite not suitable for high traffic production
+- No user authentication (simple demo app)
+- Inventory check is basic (no reservation expiry)
+- Payment is simulated (Stripe test cards only)
+
+---
 
 ## Technology Stack
 
@@ -18,11 +160,6 @@ A comprehensive distributed order processing platform built with .NET 10 microse
 - Blazor WebAssembly - Customer portal
 - React 18 + Vite - Admin dashboard (JavaScript)
 - Bootstrap 5 - UI styling
-
-### Infrastructure
-- RabbitMQ - Message broker
-- Docker - Containerization
-- GitHub Actions - CI/CD pipeline
 
 ## Project Structure
 
@@ -48,210 +185,43 @@ SportsStore/
 
 ## Microservices
 
-### 1. OrderAPI (Port 5000)
-The main gateway service handling order management with CQRS pattern.
-
-**Commands:**
-- `CheckoutOrderCommand` - Process new orders
-- `CancelOrderCommand` - Cancel existing orders
-- `ProcessInventoryResultCommand` - Handle inventory results
-- `ProcessPaymentResultCommand` - Handle payment results
-- `CreateShipmentCommand` - Create shipments
-
-**Queries:**
-- `GetOrderByIdQuery` - Get order details
-- `GetOrdersQuery` - Paginated order list
-- `GetCustomerOrdersQuery` - Customer order history
-- `GetOrdersByStatusQuery` - Filter by status
-- `GetDashboardSummaryQuery` - Dashboard metrics
+### 1. OrderAPI (Port 5138)
+Main API for orders and checkout.
 
 **Endpoints:**
 ```
 POST   /api/orders/checkout      - Create new order
 GET    /api/orders               - List all orders
 GET    /api/orders/{id}          - Get order by ID
-GET    /api/orders/status/{status} - Filter by status
-GET    /api/orders/customer      - Get customer orders
-POST   /api/orders/{id}/cancel   - Cancel order
 GET    /api/orders/dashboard     - Dashboard summary
 GET    /api/products             - List products
-GET    /api/products/{id}        - Get product
-GET    /api/products/categories  - List categories
 ```
 
-### 2. InventoryService (Port 5001)
-Manages product inventory and stock reservations.
-
-**Models:**
-- `InventoryItem` - Stock levels
-- `InventoryReservation` - Stock reservations
+### 2. InventoryService (Port 5139)
+Manages product stock.
 
 **Endpoints:**
 ```
 GET    /api/inventory            - List inventory
 GET    /api/inventory/{id}       - Get by product ID
-GET    /api/inventory/reservations - List reservations
-GET    /api/inventory/health     - Health check
 ```
 
-### 3. PaymentService (Port 5002)
-Handles payment processing with simulated transactions.
-
-**Models:**
-- `PaymentTransaction` - Transaction records
-- `TestCard` - Test card numbers for simulation
+### 3. PaymentService (Port 5140)
+Processes payments with Stripe.
 
 **Endpoints:**
 ```
 GET    /api/payment/transactions - List transactions
-GET    /api/payment/transactions/{id} - Get transaction
 GET    /api/payment/test-cards   - List test cards
-GET    /api/payment/health       - Health check
 ```
 
-### 4. ShippingService (Port 5003)
-Manages shipment creation and tracking.
-
-**Models:**
-- `Shipment` - Shipment records
-- `ShippingCarrier` - Carrier information
+### 4. ShippingService (Port 5141)
+Manages shipments.
 
 **Endpoints:**
 ```
-GET    /api/shipping/shipments  - List shipments
-GET    /api/shipping/shipments/{id} - Get shipment
-GET    /api/shipping/carriers    - List carriers
-GET    /api/shipping/track/{trackingNumber} - Track shipment
-GET    /api/shipping/health      - Health check
+GET    /api/shipping/shipments   - List shipments
+POST   /api/shipping/shipments/{id}/dispatch - Dispatch
+POST   /api/shipping/shipments/{id}/deliver  - Deliver
 ```
-
-
-
-## Getting Started
-
-### Prerequisites
-- .NET 10 SDK
-- Node.js 18+
-- Docker Desktop
-- RabbitMQ
-
-### Running Locally
-
-1. **Start RabbitMQ:**
-```bash
-docker run -d --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
-```
-
-2. **Run Microservices:**
-```bash
-
-
-cd "\SportsStore.OrderAPI"
-dotnet run --urls "http://localhost:5138"
-
-cd "\SportsStore.InventoryService"
-dotnet run --urls "http://localhost:5139"
-
-cd "\SportsStore.PaymentService"
-dotnet run --urls "http://localhost:5140"
-
-cd "\SportsStore.ShippingService"
-dotnet run --urls "http://localhost:5141"
-
-
-```
-
-3. **Run Blazor Portal:**
-```bash
-cd "\SportsStore.Blazor"
-dotnet run --urls "http://localhost:5187"
-```
-
-4. **Run React Admin:**
-```bash
-cd SportsStore.Admin
-npm install
-npm run dev
-```
-
-### Running with Docker Compose
-
-```bash
-docker build -f Dockerfile.single -t sportsstore-all .
-
-docker run -d --name sportsstore-all -p 3000:3000 -p 5187:5187 -p 5138:5138 -p 5139:5139 -p 5140:5140 -p 5141:5141 sportsstore-all
-```
-
-
-
-## Testing
-
-### Run All Tests
-```bash
-dotnet test SportsSln.sln
-```
-
-### Test Projects
-- `SportsStore.Tests` - Original application tests (Cart, Controllers, TagHelpers)
-- `SportsStore.IntegrationTests` - API integration tests
-- `SportsStore.OrderAPI.Tests` - OrderAPI unit tests
-- `SportsStore.InventoryService.Tests` - Inventory service tests
-- `SportsStore.PaymentService.Tests` - Payment service tests
-- `SportsStore.ShippingService.Tests` - Shipping service tests
-
-### Test Coverage
-Each service has comprehensive tests covering:
-- Entity creation and validation
-- Database operations
-- Business logic scenarios
-- API endpoints
-
-## CI/CD Pipeline
-
-GitHub Actions workflow includes:
-1. **Build & Test** - Compile and run all tests with coverage
-2. **Publish** - Create deployment artifacts
-3. **Docker Build** - Build and push container images
-4. **React Build** - Build admin dashboard
-5. **Integration Tests** - Run integration tests with RabbitMQ
-
-
-
-## Configuration
-
-### appsettings.json
-Each service has configuration for:
-- Database connection strings
-- RabbitMQ settings
-- Serilog logging
-
-### Environment Variables
-```bash
-# RabbitMQ
-RabbitMQ__Host=localhost
-RabbitMQ__Username=guest
-RabbitMQ__Password=guest
-
-# Database
-ConnectionStrings__OrderDatabase=Data Source=orderapi.db
-```
-
-
-
-## Features
-
-### Blazor Customer Portal
-- Product browsing with category filtering
-- Shopping cart management
-- Order checkout with validation
-- Order tracking and history
-- Responsive Bootstrap UI
-
-### React Admin Dashboard
-- Real-time order management
-- Inventory tracking and reservations
-- Payment transaction monitoring
-- Shipment tracking with carriers
-- Status-based filtering
-- Responsive sidebar navigation
 
